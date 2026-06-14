@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       AvaTrade Testimonials
  * Description:       Manage client testimonials and expose them over the WordPress REST API for a headless (Next.js) frontend. Registers the avatrade_testimonial post type with custom fields, clean REST output, and seeds demo data on activation.
- * Version:           0.1.0
+ * Version:           0.3.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Vencislav Venkov
@@ -25,7 +25,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * A unique AVATRADE_TESTIMONIALS_ prefix keeps these globals from colliding
  * with WordPress core, the active theme, or any other plugin.
  */
-define( 'AVATRADE_TESTIMONIALS_VERSION', '0.1.0' );
+define( 'AVATRADE_TESTIMONIALS_VERSION', '0.3.1' );
 define( 'AVATRADE_TESTIMONIALS_FILE', __FILE__ );
 define( 'AVATRADE_TESTIMONIALS_DIR', plugin_dir_path( __FILE__ ) );
 define( 'AVATRADE_TESTIMONIALS_URL', plugin_dir_url( __FILE__ ) );
@@ -169,7 +169,7 @@ final class Avatrade_Testimonials_Plugin {
 			'show_in_menu'  => true,
 			'menu_position' => 25,
 			'menu_icon'     => 'dashicons-format-quote',
-			'supports'      => array( 'title', 'thumbnail' ),
+			'supports'      => array( 'title', 'thumbnail', 'custom-fields' ), // 'custom-fields' is required for register_post_meta() to surface under "meta" in REST.
 			'has_archive'   => false,          // no WP-rendered archive; the front end is Next.js.
 			'rewrite'       => false,          // no pretty permalinks needed.
 			'query_var'     => false,
@@ -287,6 +287,10 @@ final class Avatrade_Testimonials_Plugin {
 			'normal',
 			'high'
 		);
+
+		// 'custom-fields' support (needed for REST meta) also adds WordPress's
+		// generic Custom Fields box; hide it since our box already covers these.
+		remove_meta_box( 'postcustom', self::POST_TYPE, 'normal' );
 	}
 
 	/**
@@ -462,7 +466,16 @@ final class Avatrade_Testimonials_Plugin {
 	 */
 	public function activate() {
 		$this->register_post_type();
-		$this->seed();
+
+		// Seeding is best-effort: a failure here must NEVER roll back activation
+		// (which would deregister the post type and 404 the REST routes).
+		// \Throwable catches PHP Errors and Exceptions alike.
+		try {
+			$this->seed();
+		} catch ( \Throwable $e ) {
+			error_log( 'AvaTrade Testimonials: demo seeding skipped — ' . $e->getMessage() );
+		}
+
 		flush_rewrite_rules();
 	}
 
@@ -536,10 +549,13 @@ final class Avatrade_Testimonials_Plugin {
 			return;
 		}
 
-		// Media helpers aren't loaded during activation — pull them in.
-		require_once ABSPATH . 'wp-admin/includes/image.php';
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/media.php';
+		// Media helpers aren't loaded during activation — pull them in (guarded).
+		foreach ( array( 'image.php', 'file.php', 'media.php' ) as $include ) {
+			$path = ABSPATH . 'wp-admin/includes/' . $include;
+			if ( file_exists( $path ) ) {
+				require_once $path;
+			}
+		}
 
 		$images = $this->get_seed_images();
 
@@ -612,6 +628,11 @@ final class Avatrade_Testimonials_Plugin {
 	 * @return void
 	 */
 	private function seed_featured_image( $post_id, $source_path, $alt ) {
+		// Bail quietly if the media stack isn't available in this runtime.
+		if ( ! function_exists( 'wp_insert_attachment' ) || ! function_exists( 'wp_generate_attachment_metadata' ) ) {
+			return;
+		}
+
 		$uploads = wp_upload_dir();
 		if ( ! empty( $uploads['error'] ) ) {
 			return;
