@@ -90,6 +90,10 @@ final class Avatrade_Testimonials_Plugin {
 		// Admin editor UI + persistence for the custom fields.
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_meta' ), 10, 2 );
+		add_filter( 'enter_title_here', array( $this, 'filter_title_placeholder' ), 10, 2 );
+
+		// Custom REST output (resolve the featured image into a usable object).
+		add_action( 'rest_api_init', array( $this, 'register_rest_fields' ) );
 	}
 
 	/**
@@ -97,7 +101,7 @@ final class Avatrade_Testimonials_Plugin {
 	 *
 	 * Hooked on `init`. This is the seam where the next iteration plugs in:
 	 *   - the avatrade_testimonial custom post type
-	 *   - its post meta (headline, quote, rating, source) with show_in_rest
+	 *   - its post meta (author name, quote, rating, source) with show_in_rest
 	 *   - the admin meta box + save handler
 	 *   - the custom REST fields (e.g. featured image object)
 	 *
@@ -106,8 +110,8 @@ final class Avatrade_Testimonials_Plugin {
 	public function register() {
 		$this->register_post_type();
 		$this->register_meta_fields();
-		// Next iteration: a custom REST field that resolves the featured image
-		// into a ready-to-use { url, width, height, alt } object.
+		// The featured-image REST field is wired separately on `rest_api_init`
+		// (see register_rest_fields); the activation seeder comes next.
 	}
 
 	/**
@@ -130,10 +134,9 @@ final class Avatrade_Testimonials_Plugin {
 	 * Register the avatrade_testimonial custom post type.
 	 *
 	 * `show_in_rest` is the key flag: it publishes the type at
-	 * /wp-json/wp/v2/avatrade_testimonial and enables the block editor.
-	 * `supports` is deliberately limited to title (the author name) and
-	 * thumbnail (the author photo); headline/quote/rating/source are custom
-	 * meta added in the next iteration, not the rich-text body.
+	 * /wp-json/wp/v2/avatrade_testimonial. `supports` is deliberately limited to
+	 * title (the testimonial headline) and thumbnail (the author photo); author
+	 * name, quote, rating and source are custom meta, not the rich-text body.
 	 *
 	 * @return void
 	 */
@@ -187,15 +190,15 @@ final class Avatrade_Testimonials_Plugin {
 	 */
 	private function get_meta_fields() {
 		return array(
-			'avatrade_headline' => array(
-				'label'       => __( 'Headline', 'avatrade-testimonials' ),
-				'description' => __( 'Short, punchy summary, e.g. “Gives me peace of mind”.', 'avatrade-testimonials' ),
+			'avatrade_author_name' => array(
+				'label'       => __( 'Author Name', 'avatrade-testimonials' ),
+				'description' => __( 'The client’s name, e.g. “Sarah Mitchell”. (The post title holds the headline.)', 'avatrade-testimonials' ),
 				'type'        => 'string',
 				'control'     => 'text',
 				'default'     => '',
 				'sanitize'    => 'sanitize_text_field',
 			),
-			'avatrade_quote'    => array(
+			'avatrade_quote'       => array(
 				'label'       => __( 'Quote', 'avatrade-testimonials' ),
 				'description' => __( 'The full testimonial text.', 'avatrade-testimonials' ),
 				'type'        => 'string',
@@ -203,7 +206,7 @@ final class Avatrade_Testimonials_Plugin {
 				'default'     => '',
 				'sanitize'    => 'sanitize_textarea_field',
 			),
-			'avatrade_rating'   => array(
+			'avatrade_rating'      => array(
 				'label'       => __( 'Star Rating', 'avatrade-testimonials' ),
 				'description' => __( 'A whole number from 1 to 5.', 'avatrade-testimonials' ),
 				'type'        => 'integer',
@@ -211,7 +214,7 @@ final class Avatrade_Testimonials_Plugin {
 				'default'     => 5,
 				'sanitize'    => array( $this, 'sanitize_rating' ),
 			),
-			'avatrade_source'   => array(
+			'avatrade_source'      => array(
 				'label'       => __( 'Source / Platform', 'avatrade-testimonials' ),
 				'description' => __( 'Where the review came from, e.g. Trustpilot.', 'avatrade-testimonials' ),
 				'type'        => 'string',
@@ -376,6 +379,77 @@ final class Avatrade_Testimonials_Plugin {
 			$value = call_user_func( $field['sanitize'], wp_unslash( $_POST[ $key ] ) );
 			update_post_meta( $post_id, $key, $value );
 		}
+	}
+
+	/**
+	 * Change the title-field placeholder so editors know the post title is the
+	 * testimonial headline (not the author's name, which is a meta field).
+	 *
+	 * @param string  $text Default placeholder.
+	 * @param WP_Post $post Current post.
+	 * @return string
+	 */
+	public function filter_title_placeholder( $text, $post ) {
+		if ( isset( $post->post_type ) && self::POST_TYPE === $post->post_type ) {
+			return __( 'Enter a headline, e.g. “Gives me peace of mind”', 'avatrade-testimonials' );
+		}
+
+		return $text;
+	}
+
+	/**
+	 * Register custom REST output for testimonials.
+	 *
+	 * Adds `avatrade_featured_image` — the featured image (author photo)
+	 * resolved into a ready-to-use object, so the headless frontend doesn't have
+	 * to request `?_embed` and dig through `_embedded` just to get a URL.
+	 *
+	 * @return void
+	 */
+	public function register_rest_fields() {
+		register_rest_field(
+			self::POST_TYPE,
+			'avatrade_featured_image',
+			array(
+				'get_callback' => array( $this, 'get_featured_image' ),
+				'schema'       => array(
+					'description' => __( 'Featured image (author photo), resolved to a usable object, or null.', 'avatrade-testimonials' ),
+					'type'        => array( 'object', 'null' ),
+					'context'     => array( 'view', 'edit' ),
+					'properties'  => array(
+						'url'    => array( 'type' => 'string' ),
+						'width'  => array( 'type' => 'integer' ),
+						'height' => array( 'type' => 'integer' ),
+						'alt'    => array( 'type' => 'string' ),
+					),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Resolve a testimonial's featured image for REST output.
+	 *
+	 * @param array $post REST representation of the post; $post['id'] is the ID.
+	 * @return array<string, mixed>|null { url, width, height, alt } or null when unset.
+	 */
+	public function get_featured_image( $post ) {
+		$attachment_id = get_post_thumbnail_id( $post['id'] );
+		if ( ! $attachment_id ) {
+			return null;
+		}
+
+		$image = wp_get_attachment_image_src( $attachment_id, 'full' );
+		if ( ! $image ) {
+			return null;
+		}
+
+		return array(
+			'url'    => $image[0],
+			'width'  => (int) $image[1],
+			'height' => (int) $image[2],
+			'alt'    => (string) get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ),
+		);
 	}
 
 	/**
