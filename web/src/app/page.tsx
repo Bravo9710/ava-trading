@@ -1,5 +1,9 @@
-import Image from "next/image";
+"use client";
+
+import { Swiper, SwiperSlide } from "swiper/react";
+import "swiper/css";
 import styles from "./page.module.css";
+import TestimonialBox from "./components/TestimonialBox";
 
 export default function Home() {
   return (
@@ -7,9 +11,13 @@ export default function Home() {
       <main className={styles.main}>
         <section className={styles.sliderSection}>
           <h2 className={styles.title}>We Let Our Clients Do The Talking</h2>
-          <div className={styles.slide}>
-            <Image src={"/quotes-icon.png"} alt="quotes icon" width={25} height={24} loading="eager" />
-          </div>
+          <Swiper>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <SwiperSlide key={index} className={styles.slide}>
+                <TestimonialBox />
+              </SwiperSlide>
+            ))}
+          </Swiper>
         </section>
       </main>
     </div>
