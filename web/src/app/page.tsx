@@ -6,7 +6,9 @@ export default function Home() {
     <div className={styles.page}>
       <main className={styles.main}>
         <section className={styles.sliderSection}>
-          {/* Slider here */}
+          <div className={styles.slide}>
+            <Image src={"/quotes-icon.png"} alt="quotes icon" width={25} height={24} loading="eager" />
+          </div>
         </section>
       </main>
     </div>
