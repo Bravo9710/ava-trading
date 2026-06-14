@@ -1,0 +1,149 @@
+@import url('https://api.fontshare.com/v2/css?f[]=switzer@100,200,300,400,500,600,700,800,900&display=swap');
+
+:root {
+  --background: #ffffff;
+  --foreground: #101820;
+  --font-switzer: 'Switzer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #101820;
+    --foreground: #ededed;
+  }
+}
+
+html {
+  height: 100%;
+}
+
+html,
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-switzer);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Page layout
+   ------------------------------------------------------------------------- */
+.page {
+  --background: #101820;
+  --foreground: #101820;
+  --text-primary: #000;
+  --text-secondary: #666;
+  --button-primary-hover: #383838;
+  --button-secondary-hover: #f2f2f2;
+  --button-secondary-border: #ebebeb;
+  --slide-background: #4c61ff;
+
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-switzer);
+  background-color: var(--background);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  max-width: 1560px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  background-color: var(--foreground);
+  padding: 120px 15px;
+}
+
+.slider-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  width: 100%;
+  background-color: var(--foreground);
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 44px;
+  color: #e5ff91;
+  text-transform: capitalize;
+  padding-bottom: 39px;
+}
+
+/* -------------------------------------------------------------------------
+   Slider
+   ------------------------------------------------------------------------- */
+.testimonial-slider {
+  width: 100%;
+}
+
+.swiper-pagination-bullet {
+  background: #C2D5FF !important;
+  opacity: 1 !important;
+}
+
+.swiper-pagination-bullet-active {
+  background: #4C61FF !important;
+  opacity: 1 !important;
+}
+
+/* -------------------------------------------------------------------------
+   Testimonial card
+   ------------------------------------------------------------------------- */
+.testimonial-box {
+  clip-path: polygon(100% 0%, 100% 100%, 0% 100%, 0% 12%, 5% 0%);
+  padding: 32px 40px;
+  background-color: var(--slide-background);
+}
+
+.testimonial-avatar {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+
+  img {
+    object-fit: cover;
+  }
+}
+
+@media (max-width: 600px) {
+  .main {
+    padding: 48px 24px;
+  }
+}

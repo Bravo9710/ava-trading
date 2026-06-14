@@ -1,23 +1,15 @@
-"use client";
+import TestimonialsSlider from "./components/TestimonialsSlider";
+import { getTestimonials } from "@/lib/wp";
 
-import { Swiper, SwiperSlide } from "swiper/react";
-import "swiper/css";
-import styles from "./page.module.css";
-import TestimonialBox from "./components/TestimonialBox";
+export default async function Home() {
+  const testimonials = await getTestimonials();
 
-export default function Home() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <section className={styles.sliderSection}>
-          <h2 className={styles.title}>We Let Our Clients Do The Talking</h2>
-          <Swiper>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <SwiperSlide key={index} className={styles.slide}>
-                <TestimonialBox />
-              </SwiperSlide>
-            ))}
-          </Swiper>
+    <div className="page">
+      <main className="main">
+        <section className="slider-section">
+          <h2 className="section-title">We Let Our Clients Do The Talking</h2>
+          <TestimonialsSlider testimonials={testimonials} />
         </section>
       </main>
     </div>
