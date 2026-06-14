@@ -40,6 +40,13 @@ define( 'AVATRADE_TESTIMONIALS_URL', plugin_dir_url( __FILE__ ) );
 final class Avatrade_Testimonials_Plugin {
 
 	/**
+	 * Post type slug. Exactly 20 characters — WordPress's maximum.
+	 *
+	 * @var string
+	 */
+	const POST_TYPE = 'avatrade_testimonial';
+
+	/**
 	 * Shared singleton instance.
 	 *
 	 * @var Avatrade_Testimonials_Plugin|null
@@ -77,7 +84,12 @@ final class Avatrade_Testimonials_Plugin {
 		register_activation_hook( AVATRADE_TESTIMONIALS_FILE, array( $this, 'activate' ) );
 		register_deactivation_hook( AVATRADE_TESTIMONIALS_FILE, array( $this, 'deactivate' ) );
 
+		add_action( 'after_setup_theme', array( $this, 'add_theme_supports' ) );
 		add_action( 'init', array( $this, 'register' ) );
+
+		// Admin editor UI + persistence for the custom fields.
+		add_action( 'add_meta_boxes', array( $this, 'add_meta_box' ) );
+		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_meta' ), 10, 2 );
 	}
 
 	/**
@@ -92,7 +104,278 @@ final class Avatrade_Testimonials_Plugin {
 	 * @return void
 	 */
 	public function register() {
-		// Intentionally empty for now — components are added in the next step.
+		$this->register_post_type();
+		$this->register_meta_fields();
+		// Next iteration: a custom REST field that resolves the featured image
+		// into a ready-to-use { url, width, height, alt } object.
+	}
+
+	/**
+	 * Ensure the active theme exposes featured-image (post thumbnail) support.
+	 *
+	 * A headless install may run a minimal theme that never opts in, which would
+	 * hide the "Author Photo" box in the editor. We enable it globally only when
+	 * the theme hasn't already — so we never *narrow* a theme that already
+	 * supports thumbnails for all post types.
+	 *
+	 * @return void
+	 */
+	public function add_theme_supports() {
+		if ( ! current_theme_supports( 'post-thumbnails' ) ) {
+			add_theme_support( 'post-thumbnails' );
+		}
+	}
+
+	/**
+	 * Register the avatrade_testimonial custom post type.
+	 *
+	 * `show_in_rest` is the key flag: it publishes the type at
+	 * /wp-json/wp/v2/avatrade_testimonial and enables the block editor.
+	 * `supports` is deliberately limited to title (the author name) and
+	 * thumbnail (the author photo); headline/quote/rating/source are custom
+	 * meta added in the next iteration, not the rich-text body.
+	 *
+	 * @return void
+	 */
+	private function register_post_type() {
+		$labels = array(
+			'name'                  => _x( 'Testimonials', 'Post type general name', 'avatrade-testimonials' ),
+			'singular_name'         => _x( 'Testimonial', 'Post type singular name', 'avatrade-testimonials' ),
+			'menu_name'             => _x( 'Testimonials', 'Admin Menu text', 'avatrade-testimonials' ),
+			'name_admin_bar'        => _x( 'Testimonial', 'Add New on Toolbar', 'avatrade-testimonials' ),
+			'add_new'               => __( 'Add New', 'avatrade-testimonials' ),
+			'add_new_item'          => __( 'Add New Testimonial', 'avatrade-testimonials' ),
+			'new_item'              => __( 'New Testimonial', 'avatrade-testimonials' ),
+			'edit_item'             => __( 'Edit Testimonial', 'avatrade-testimonials' ),
+			'view_item'             => __( 'View Testimonial', 'avatrade-testimonials' ),
+			'all_items'             => __( 'All Testimonials', 'avatrade-testimonials' ),
+			'search_items'          => __( 'Search Testimonials', 'avatrade-testimonials' ),
+			'not_found'             => __( 'No testimonials found.', 'avatrade-testimonials' ),
+			'not_found_in_trash'    => __( 'No testimonials found in Trash.', 'avatrade-testimonials' ),
+			'featured_image'        => __( 'Author Photo', 'avatrade-testimonials' ),
+			'set_featured_image'    => __( 'Set author photo', 'avatrade-testimonials' ),
+			'remove_featured_image' => __( 'Remove author photo', 'avatrade-testimonials' ),
+			'use_featured_image'    => __( 'Use as author photo', 'avatrade-testimonials' ),
+			'items_list'            => __( 'Testimonials list', 'avatrade-testimonials' ),
+		);
+
+		$args = array(
+			'labels'        => $labels,
+			'description'   => __( 'Client testimonials exposed via the REST API.', 'avatrade-testimonials' ),
+			'public'        => true,           // readable on the front end + anonymously via REST (headless needs this).
+			'show_in_menu'  => true,
+			'menu_position' => 25,
+			'menu_icon'     => 'dashicons-format-quote',
+			'supports'      => array( 'title', 'thumbnail' ),
+			'has_archive'   => false,          // no WP-rendered archive; the front end is Next.js.
+			'rewrite'       => false,          // no pretty permalinks needed.
+			'query_var'     => false,
+			'show_in_rest'  => true,           // exposes /wp-json/wp/v2/avatrade_testimonial + block editor.
+			'rest_base'     => self::POST_TYPE,
+		);
+
+		register_post_type( self::POST_TYPE, $args );
+	}
+
+	/**
+	 * Definition of the custom fields.
+	 *
+	 * Single source of truth shared by registration (REST + sanitisation), the
+	 * meta box renderer, and the save handler — so each field is described once.
+	 *
+	 * @return array<string, array<string, mixed>>
+	 */
+	private function get_meta_fields() {
+		return array(
+			'avatrade_headline' => array(
+				'label'       => __( 'Headline', 'avatrade-testimonials' ),
+				'description' => __( 'Short, punchy summary, e.g. “Gives me peace of mind”.', 'avatrade-testimonials' ),
+				'type'        => 'string',
+				'control'     => 'text',
+				'default'     => '',
+				'sanitize'    => 'sanitize_text_field',
+			),
+			'avatrade_quote'    => array(
+				'label'       => __( 'Quote', 'avatrade-testimonials' ),
+				'description' => __( 'The full testimonial text.', 'avatrade-testimonials' ),
+				'type'        => 'string',
+				'control'     => 'textarea',
+				'default'     => '',
+				'sanitize'    => 'sanitize_textarea_field',
+			),
+			'avatrade_rating'   => array(
+				'label'       => __( 'Star Rating', 'avatrade-testimonials' ),
+				'description' => __( 'A whole number from 1 to 5.', 'avatrade-testimonials' ),
+				'type'        => 'integer',
+				'control'     => 'select',
+				'default'     => 5,
+				'sanitize'    => array( $this, 'sanitize_rating' ),
+			),
+			'avatrade_source'   => array(
+				'label'       => __( 'Source / Platform', 'avatrade-testimonials' ),
+				'description' => __( 'Where the review came from, e.g. Trustpilot.', 'avatrade-testimonials' ),
+				'type'        => 'string',
+				'control'     => 'text',
+				'default'     => '',
+				'sanitize'    => 'sanitize_text_field',
+			),
+		);
+	}
+
+	/**
+	 * Register each custom field as post meta exposed in the REST API.
+	 *
+	 * `show_in_rest` surfaces the value under the "meta" object of each
+	 * testimonial. Because the post type does not support 'editor', the screen
+	 * uses the classic editor (not the block editor), so writes happen solely
+	 * through the meta box + save_meta() below — there is no Gutenberg/meta-box
+	 * double-save to reconcile.
+	 *
+	 * @return void
+	 */
+	private function register_meta_fields() {
+		foreach ( $this->get_meta_fields() as $key => $field ) {
+			register_post_meta(
+				self::POST_TYPE,
+				$key,
+				array(
+					'type'              => $field['type'],
+					'description'       => $field['description'],
+					'single'            => true,
+					'default'           => $field['default'],
+					'show_in_rest'      => true,
+					'sanitize_callback' => $field['sanitize'],
+					'auth_callback'     => array( $this, 'can_edit_testimonials' ),
+				)
+			);
+		}
+	}
+
+	/**
+	 * Clamp a rating to a whole number within 1–5.
+	 *
+	 * @param mixed $value Raw value.
+	 * @return int
+	 */
+	public function sanitize_rating( $value ) {
+		return min( 5, max( 1, absint( $value ) ) );
+	}
+
+	/**
+	 * Permission check for editing testimonial meta via REST.
+	 *
+	 * @return bool
+	 */
+	public function can_edit_testimonials() {
+		return current_user_can( 'edit_posts' );
+	}
+
+	/**
+	 * Add the "Testimonial Details" meta box to the editor screen.
+	 *
+	 * @return void
+	 */
+	public function add_meta_box() {
+		add_meta_box(
+			'avatrade_testimonial_details',
+			__( 'Testimonial Details', 'avatrade-testimonials' ),
+			array( $this, 'render_meta_box' ),
+			self::POST_TYPE,
+			'normal',
+			'high'
+		);
+	}
+
+	/**
+	 * Render the meta box: one labelled control per custom field.
+	 *
+	 * @param WP_Post $post Current post.
+	 * @return void
+	 */
+	public function render_meta_box( $post ) {
+		wp_nonce_field( 'avatrade_save_testimonial', 'avatrade_testimonial_nonce' );
+
+		foreach ( $this->get_meta_fields() as $key => $field ) {
+			$id    = esc_attr( $key );
+			$value = get_post_meta( $post->ID, $key, true );
+
+			printf(
+				'<p><label for="%1$s"><strong>%2$s</strong></label></p>',
+				$id,
+				esc_html( $field['label'] )
+			);
+
+			switch ( $field['control'] ) {
+				case 'textarea':
+					printf(
+						'<textarea id="%1$s" name="%1$s" rows="5" class="widefat">%2$s</textarea>',
+						$id,
+						esc_textarea( $value )
+					);
+					break;
+
+				case 'select':
+					$current = (int) $value;
+					echo '<select id="' . $id . '" name="' . $id . '">';
+					for ( $star = 1; $star <= 5; $star++ ) {
+						printf(
+							'<option value="%1$d"%2$s>%3$s</option>',
+							$star,
+							selected( $current, $star, false ),
+							esc_html( sprintf( _n( '%d star', '%d stars', $star, 'avatrade-testimonials' ), $star ) )
+						);
+					}
+					echo '</select>';
+					break;
+
+				default:
+					printf(
+						'<input type="text" id="%1$s" name="%1$s" value="%2$s" class="widefat" />',
+						$id,
+						esc_attr( $value )
+					);
+					break;
+			}
+
+			if ( ! empty( $field['description'] ) ) {
+				printf( '<p class="description">%s</p>', esc_html( $field['description'] ) );
+			}
+		}
+	}
+
+	/**
+	 * Persist the custom fields when a testimonial is saved.
+	 *
+	 * Guards against CSRF (nonce), autosave, and insufficient permissions, then
+	 * sanitises each submitted value with its field-specific callback before
+	 * storing it.
+	 *
+	 * @param int     $post_id Post ID.
+	 * @param WP_Post $post    Post object (unused; kept for the hook signature).
+	 * @return void
+	 */
+	public function save_meta( $post_id, $post ) {
+		if ( ! isset( $_POST['avatrade_testimonial_nonce'] )
+			|| ! wp_verify_nonce( sanitize_key( wp_unslash( $_POST['avatrade_testimonial_nonce'] ) ), 'avatrade_save_testimonial' ) ) {
+			return;
+		}
+
+		if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'edit_post', $post_id ) ) {
+			return;
+		}
+
+		foreach ( $this->get_meta_fields() as $key => $field ) {
+			if ( ! isset( $_POST[ $key ] ) ) {
+				continue;
+			}
+
+			$value = call_user_func( $field['sanitize'], wp_unslash( $_POST[ $key ] ) );
+			update_post_meta( $post_id, $key, $value );
+		}
 	}
 
 	/**
@@ -105,7 +388,9 @@ final class Avatrade_Testimonials_Plugin {
 	 * @return void
 	 */
 	public function activate() {
-		// TODO (next iteration): register the CPT, then seed demo data.
+		// Register the post type up front so its rewrite rules exist before the
+		// flush. (Seeding demo data will be added here in a later iteration.)
+		$this->register_post_type();
 		flush_rewrite_rules();
 	}
 
@@ -123,5 +408,4 @@ final class Avatrade_Testimonials_Plugin {
 	}
 }
 
-// Fire it up.
 Avatrade_Testimonials_Plugin::instance()->run();
