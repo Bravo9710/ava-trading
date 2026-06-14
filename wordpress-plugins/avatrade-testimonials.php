@@ -455,17 +455,195 @@ final class Avatrade_Testimonials_Plugin {
 	/**
 	 * Runs once on plugin activation.
 	 *
-	 * The next iteration will register the post type here (so its rewrite
-	 * rules exist) and seed demo testimonials before flushing. For now we just
-	 * flush so the install starts from a clean, predictable state.
+	 * Registers the post type up front (so its rewrite rules exist before the
+	 * flush) and seeds demo testimonials on first activation.
 	 *
 	 * @return void
 	 */
 	public function activate() {
-		// Register the post type up front so its rewrite rules exist before the
-		// flush. (Seeding demo data will be added here in a later iteration.)
 		$this->register_post_type();
+		$this->seed();
 		flush_rewrite_rules();
+	}
+
+	/**
+	 * The demo testimonials seeded on first activation.
+	 *
+	 * Six entries, each with a headline (post title), author name, quote,
+	 * rating and source. Featured images are paired by position with the files
+	 * in assets/seed-images/ (see get_seed_images()).
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function get_seed_data() {
+		return array(
+			array(
+				'headline' => 'Gives me peace of mind',
+				'author'   => 'Sarah Mitchell',
+				'quote'    => 'The platform is intuitive and the support team is always there when I need them. I finally feel in control of my trades.',
+				'rating'   => 5,
+				'source'   => 'Trustpilot',
+			),
+			array(
+				'headline' => 'Best broker I’ve used',
+				'author'   => 'James Okafor',
+				'quote'    => 'Fast execution, transparent fees, and the mobile app is rock solid. Switching to AvaTrade was the best decision for my portfolio.',
+				'rating'   => 5,
+				'source'   => 'Google',
+			),
+			array(
+				'headline' => 'Perfect for beginners',
+				'author'   => 'Elena Rossi',
+				'quote'    => 'I started with zero experience. The educational resources and demo account helped me learn without any pressure.',
+				'rating'   => 4,
+				'source'   => 'Trustpilot',
+			),
+			array(
+				'headline' => 'Reliable and fast',
+				'author'   => 'David Chen',
+				'quote'    => 'Withdrawals are processed quickly and I’ve never had an issue with slippage, even during volatile markets.',
+				'rating'   => 5,
+				'source'   => 'App Store',
+			),
+			array(
+				'headline' => 'Customer service that stands out',
+				'author'   => 'Amara Nwosu',
+				'quote'    => 'Whenever I have a question, a real person answers within minutes. That level of care is rare these days.',
+				'rating'   => 5,
+				'source'   => 'Trustpilot',
+			),
+			array(
+				'headline' => 'A platform I trust',
+				'author'   => 'Thomas Müller',
+				'quote'    => 'Regulated, secure, and packed with the tools I need for technical analysis. Highly recommended.',
+				'rating'   => 4,
+				'source'   => 'Google',
+			),
+		);
+	}
+
+	/**
+	 * Seed the demo testimonials — once.
+	 *
+	 * Guarded by the avatrade_testimonials_seeded option so repeat activations
+	 * never duplicate the data. Each entry is published with its meta and, by
+	 * position, paired with a bundled image from assets/seed-images/.
+	 *
+	 * @return void
+	 */
+	private function seed() {
+		if ( get_option( 'avatrade_testimonials_seeded' ) ) {
+			return;
+		}
+
+		// Media helpers aren't loaded during activation — pull them in.
+		require_once ABSPATH . 'wp-admin/includes/image.php';
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+		require_once ABSPATH . 'wp-admin/includes/media.php';
+
+		$images = $this->get_seed_images();
+
+		foreach ( array_values( $this->get_seed_data() ) as $index => $item ) {
+			$post_id = wp_insert_post(
+				array(
+					'post_type'   => self::POST_TYPE,
+					'post_status' => 'publish',
+					'post_title'  => $item['headline'],
+				),
+				true
+			);
+
+			if ( is_wp_error( $post_id ) || ! $post_id ) {
+				continue;
+			}
+
+			update_post_meta( $post_id, 'avatrade_author_name', $item['author'] );
+			update_post_meta( $post_id, 'avatrade_quote', $item['quote'] );
+			update_post_meta( $post_id, 'avatrade_rating', (int) $item['rating'] );
+			update_post_meta( $post_id, 'avatrade_source', $item['source'] );
+
+			if ( isset( $images[ $index ] ) ) {
+				$this->seed_featured_image( $post_id, $images[ $index ], $item['author'] );
+			}
+		}
+
+		update_option( 'avatrade_testimonials_seeded', AVATRADE_TESTIMONIALS_VERSION );
+	}
+
+	/**
+	 * Return the bundled seed images, sorted, as absolute file paths.
+	 *
+	 * Non-image files in the directory (e.g. the index.php guard) are ignored.
+	 * Position in this list maps to position in get_seed_data().
+	 *
+	 * @return array<int, string>
+	 */
+	private function get_seed_images() {
+		$found = glob( AVATRADE_TESTIMONIALS_DIR . 'assets/seed-images/*' );
+
+		if ( empty( $found ) ) {
+			return array();
+		}
+
+		$images = array_filter(
+			$found,
+			static function ( $path ) {
+				$ext = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+				return in_array( $ext, array( 'jpg', 'jpeg', 'png', 'gif', 'webp' ), true );
+			}
+		);
+
+		sort( $images );
+
+		return array_values( $images );
+	}
+
+	/**
+	 * Copy a bundled image into the media library and set it as the featured
+	 * image for a testimonial.
+	 *
+	 * Sub-size generation degrades gracefully if no image editor (e.g. GD) is
+	 * available in the runtime — the original full-size image is still stored
+	 * and returned via the REST field.
+	 *
+	 * @param int    $post_id     Testimonial post ID.
+	 * @param string $source_path Absolute path to the bundled image.
+	 * @param string $alt         Alt text (the author's name).
+	 * @return void
+	 */
+	private function seed_featured_image( $post_id, $source_path, $alt ) {
+		$uploads = wp_upload_dir();
+		if ( ! empty( $uploads['error'] ) ) {
+			return;
+		}
+
+		$filename = wp_unique_filename( $uploads['path'], basename( $source_path ) );
+		$dest     = trailingslashit( $uploads['path'] ) . $filename;
+
+		if ( ! copy( $source_path, $dest ) ) {
+			return;
+		}
+
+		$filetype   = wp_check_filetype( $filename, null );
+		$attachment = array(
+			'post_mime_type' => $filetype['type'],
+			'post_title'     => sanitize_file_name( pathinfo( $filename, PATHINFO_FILENAME ) ),
+			'post_content'   => '',
+			'post_status'    => 'inherit',
+		);
+
+		$attach_id = wp_insert_attachment( $attachment, $dest, $post_id );
+		if ( is_wp_error( $attach_id ) || ! $attach_id ) {
+			return;
+		}
+
+		$metadata = wp_generate_attachment_metadata( $attach_id, $dest );
+		if ( ! empty( $metadata ) ) {
+			wp_update_attachment_metadata( $attach_id, $metadata );
+		}
+
+		update_post_meta( $attach_id, '_wp_attachment_image_alt', $alt );
+		set_post_thumbnail( $post_id, $attach_id );
 	}
 
 	/**
