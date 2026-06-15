@@ -106,6 +106,13 @@ a {
 /* -------------------------------------------------------------------------
    Slider
    ------------------------------------------------------------------------- */
+.testimonial-carousel {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+}
+
 .testimonial-slider {
   width: 100%;
   overflow: visible !important;
@@ -148,17 +155,25 @@ a {
     }
 
     &[data-layer="0"][data-side="left"] {
-      transform: translateX(300px) scale(0.75);
+      transform: translateX(270px) scale(0.75);
     }
 
     &[data-layer="0"][data-side="right"] {
-      transform: translateX(-300px) scale(0.75);
+      transform: translateX(-270px) scale(0.75);
     }
 
     /* ── Beyond ±2: hidden so only 5 are ever visible ── */
     &[data-layer="hidden"] {
       opacity: 0;
       pointer-events: none;
+
+      &[data-side="left"] {
+        transform: translateX(270px) scale(0.75);
+      }
+
+      &[data-side="right"] {
+        transform: translateX(-270px) scale(0.75);
+      }
     }
 
     /* Narrower slides on phones / small screens. */
@@ -168,19 +183,25 @@ a {
   }
 }
 
-.swiper-pagination {
-  position: static !important;
+.testimonial-pagination {
+  display: flex;
+  gap: 8px;
   margin-top: 37px;
 }
 
-.swiper-pagination-bullet {
-  background: #C2D5FF !important;
-  opacity: 1 !important;
-}
+.testimonial-bullet {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #c2d5ff;
+  cursor: pointer;
+  transition: background 0.3s ease, width 0.3s ease;
 
-.swiper-pagination-bullet-active {
-  background: #4C61FF !important;
-  opacity: 1 !important;
+  &.is-active {
+    background: #4c61ff;
+  }
 }
 
 /* -------------------------------------------------------------------------
@@ -280,5 +301,19 @@ a {
 @media (max-width: 600px) {
   .main {
     padding: 48px 24px;
+  }
+}
+
+/* Accessibility: honour users who prefer reduced motion. The carousel still
+   works — the track and the scale/blur layering just snap instead of animating. */
+@media (prefers-reduced-motion: reduce) {
+  .testimonial-slider {
+    .swiper-wrapper {
+      transition-duration: 0ms !important;
+    }
+
+    .slide {
+      transition: none !important;
+    }
   }
 }
