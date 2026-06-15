@@ -202,21 +202,13 @@ Resulting payload per item:
 - **Styling: SCSS** via a single global stylesheet (`globals.scss`) with plain class names.
   For one self-contained section this is simpler to reason about than CSS Modules, and SCSS
   nesting keeps the slider/card rules organized. `sass` is the only styling dependency.
-- **Carousel: Swiper** (React, `Navigation` module). Mature, accessible, supports mouse drag,
-  keyboard, loop and centered slides natively. The signature "center card focused, neighbours
-  scaled + blurred" stack is done with a small `updateLayers` helper that tags each slide with
-  its distance from center (`data-layer` / `data-side`), which CSS turns into per-layer
-  `transform: scale()/translateX()` + blur (slides beyond ±2 are hidden so only 5 ever show).
-  Crucially the overlap uses **transforms, not margins**, so Swiper's layout math stays intact
-  (fixed-width slides + `slidesPerView="auto"` + `centeredSlides`).
-- **Centered-loop slide count.** A centered `slidesPerView="auto"` loop needs enough slides on
-  _both_ sides of the active card; with only 6 testimonials Swiper runs short and leaves the
-  far side empty (the +2 card never appears). `TestimonialsSlider` repeats the set until there
-  are comfortably enough slides (no-op once there are ≥10 real testimonials).
-- **Custom pagination, not Swiper's.** The dots are our own `<button role="tab">` list driven
-  off `swiper.realIndex % testimonials.length`, so the repeated slides never inflate the dot
-  count — there's always exactly one dot per _unique_ testimonial — and clicks map back via
-  `slideToLoop()`.
+- **Carousel: Swiper** (React, with the `Navigation` + `Pagination` modules). Mature,
+  accessible, supports mouse drag, keyboard, loop and centered slides natively. The signature
+  "center card focused, neighbours scaled + blurred" stack is done with a small
+  `updateLayers` helper that tags each slide with its distance from center
+  (`data-layer` / `data-side`), which CSS turns into per-layer `transform: scale()/translateX()`
+  - blur. Crucially the overlap uses **transforms, not margins**, so Swiper's layout math
+    stays intact (fixed-width slides + `slidesPerView="auto"` + `centeredSlides`).
 
 ---
 
