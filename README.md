@@ -202,13 +202,21 @@ Resulting payload per item:
 - **Styling: SCSS** via a single global stylesheet (`globals.scss`) with plain class names.
   For one self-contained section this is simpler to reason about than CSS Modules, and SCSS
   nesting keeps the slider/card rules organized. `sass` is the only styling dependency.
-- **Carousel: Swiper** (React, with the `Navigation` + `Pagination` modules). Mature,
-  accessible, supports mouse drag, keyboard, loop and centered slides natively. The signature
-  "center card focused, neighbours scaled + blurred" stack is done with a small
-  `updateLayers` helper that tags each slide with its distance from center
-  (`data-layer` / `data-side`), which CSS turns into per-layer `transform: scale()/translateX()`
-  - blur. Crucially the overlap uses **transforms, not margins**, so Swiper's layout math
-    stays intact (fixed-width slides + `slidesPerView="auto"` + `centeredSlides`).
+- **Carousel: Swiper** (React, `Navigation` module). Mature, accessible, supports mouse drag,
+  keyboard, loop and centered slides natively. The signature "center card focused, neighbours
+  scaled + blurred" stack is done with a small `updateLayers` helper that tags each slide with
+  its distance from center (`data-layer` / `data-side`), which CSS turns into per-layer
+  `transform: scale()/translateX()` + blur (slides beyond ±2 are hidden so only 5 ever show).
+  Crucially the overlap uses **transforms, not margins**, so Swiper's layout math stays intact
+  (fixed-width slides + `slidesPerView="auto"` + `centeredSlides`).
+- **Centered-loop slide count.** A centered `slidesPerView="auto"` loop needs enough slides on
+  _both_ sides of the active card; with only 6 testimonials Swiper runs short and leaves the
+  far side empty (the +2 card never appears). `TestimonialsSlider` repeats the set until there
+  are comfortably enough slides (no-op once there are ≥10 real testimonials).
+- **Custom pagination, not Swiper's.** The dots are our own `<button role="tab">` list driven
+  off `swiper.realIndex % testimonials.length`, so the repeated slides never inflate the dot
+  count — there's always exactly one dot per _unique_ testimonial — and clicks map back via
+  `slideToLoop()`.
 
 ---
 
@@ -232,7 +240,10 @@ Resulting payload per item:
 
 - Semantic markup (`blockquote` for quotes), star rating exposed via `role="img"` +
   `aria-label="Rated N out of 5"`, decorative icons hidden from assistive tech.
-- Swiper provides keyboard navigation and focusable, clickable pagination.
+- Swiper provides keyboard navigation and mouse-drag; the custom pagination dots are real
+  focusable `<button role="tab">`s with `aria-selected` and per-dot `aria-label`s.
+- **`prefers-reduced-motion`.** Users who request reduced motion get the slide/scale/blur
+  transitions disabled (the carousel still works — layers snap instead of animating).
 
 ---
 
@@ -242,8 +253,6 @@ Resulting payload per item:
   serverless/ephemeral model didn't reliably persist a custom plugin to the instances serving
   public REST, so I moved to **LocalWP**. For production I'd deploy the plugin baked into the
   WP image (or a managed WP host) rather than via dashboard upload.
-- **`prefers-reduced-motion`.** Should disable the slide/scale/blur transitions for users who
-  request reduced motion — an accessibility requirement I'd add next.
 - **Loading/error UI.** `getTestimonials()` throws on failure; I'd add `loading.tsx` and
   `error.tsx` boundaries plus an empty state.
 - **Tests.** No automated tests yet — I'd add unit tests for the `wp.ts` mapper and a
