@@ -88,7 +88,7 @@ a {
 .slider-section {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-start;
   width: 100%;
   background-color: var(--foreground);
@@ -100,6 +100,7 @@ a {
   color: #e5ff91;
   text-transform: capitalize;
   padding-bottom: 39px;
+  text-align: center;
 }
 
 /* -------------------------------------------------------------------------
@@ -107,6 +108,69 @@ a {
    ------------------------------------------------------------------------- */
 .testimonial-slider {
   width: 100%;
+  overflow: visible !important;
+
+  .swiper-wrapper {
+    align-items: stretch;
+  }
+
+  .slide {
+    width: 423px !important;
+    height: auto;
+    display: flex;
+    transition: filter 0.4s ease, transform 0.4s ease, opacity 0.4s ease;
+    filter: drop-shadow(0px 0px 164px rgba(0, 0, 0, 0.45));
+
+    /* ── Layer 2: active (focused) slide ── */
+    &[data-layer="2"] {
+      z-index: 3;
+      transform: scale(1);
+    }
+
+    /* ── Layer 1: adjacent slides — slight blur, pulled toward centre ── */
+    &[data-layer="1"] {
+      z-index: 2;
+      filter: blur(2px);
+    }
+
+    &[data-layer="1"][data-side="left"] {
+      transform: translateX(67px) scale(0.85);
+    }
+
+    &[data-layer="1"][data-side="right"] {
+      transform: translateX(-67px) scale(0.85);
+    }
+
+    /* ── Layer 0: outer slides — stronger blur, pulled in further ── */
+    &[data-layer="0"] {
+      z-index: 1;
+      filter: blur(5px);
+    }
+
+    &[data-layer="0"][data-side="left"] {
+      transform: translateX(300px) scale(0.75);
+    }
+
+    &[data-layer="0"][data-side="right"] {
+      transform: translateX(-300px) scale(0.75);
+    }
+
+    /* ── Beyond ±2: hidden so only 5 are ever visible ── */
+    &[data-layer="hidden"] {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Narrower slides on phones / small screens. */
+    @media (max-width: 768px) {
+      max-width: 320px;
+    }
+  }
+}
+
+.swiper-pagination {
+  position: static !important;
+  margin-top: 37px;
 }
 
 .swiper-pagination-bullet {
@@ -124,23 +188,94 @@ a {
    ------------------------------------------------------------------------- */
 .testimonial-box {
   clip-path: polygon(100% 0%, 100% 100%, 0% 100%, 0% 12%, 5% 0%);
-  padding: 32px 40px;
+  padding: 22px 32px;
   background-color: var(--slide-background);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  height: 100%;
+  width: 100%;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.testimonial-box-content {
+  display: flex;
+  gap: 18px;
+  flex: 1;
+
+  @media (max-width: 768px) {
+      gap:10px;
+    }
+}
+
+.testimonial-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  flex: 1;
+}
+
+.testimonial-headline {
+  font-size: 22px;
+  line-height: 23px;
+  margin-bottom: 4px;
+  font-weight: 400;
 }
 
 .testimonial-avatar {
+  border-width: 5px;
+  border-color: #6073FF;
+  border-style: solid;
+  border-radius: 50%;
   position: relative;
   display: block;
-  width: 56px;
-  height: 56px;
+  width: 78px;
+  height: 78px;
   flex-shrink: 0;
-  border-radius: 50%;
   overflow: hidden;
 
   img {
     object-fit: cover;
   }
 }
+
+.testimonial-name {
+  color: #E5FF91;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.testimonial-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: end;
+  padding-top: 15px;
+
+  img {
+    margin-right: -10px;
+    margin-bottom: 5px;
+  }
+}
+
+.testimonial-stars {
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+
+  .star-box {
+    width: 17px;
+    height: 17px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: #00B67A;
+  }
+}
+
+
 
 @media (max-width: 600px) {
   .main {
